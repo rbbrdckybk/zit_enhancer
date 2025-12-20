@@ -10,3 +10,4 @@ I get good results on a 12GB 3060 with a [Q4_K_M quantized Qwen 3 2507](https://
 python enhance.py --prompt_file <filename containing your prompts, one per line> --model <ollama model to use>
 ```
 
+For additional options, run ```python enhance.py --help```.
