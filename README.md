@@ -6,6 +6,7 @@ Simple command-line utility that will utilize a local Ollama instance to enhance
 I get good results on a 12GB 3060 with a [Q4_K_M quantized Qwen 3 2507](https://ollama.com/library/qwen3:30b-a3b-instruct-2507-q4_K_M) model.
 
 # Usage
+Make sure [Ollama](https://ollama.com/download) is running, then:
 ```
 python enhance.py --prompt_file <filename containing your prompts, one per line> --model <ollama model to use>
 ```
