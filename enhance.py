@@ -13,6 +13,7 @@ from termcolor import colored, cprint
 from os.path import exists
 import argparse
 import platform
+import time
 
 if platform.system() == "Windows":
     import colorama
@@ -91,7 +92,26 @@ def enhance_prompt(prompt, ollama_model, template):
     ])
     enhanced = response.message.content
     return enhanced
+    
 
+# given seconds, returns a string representing time in hours, minutes, seconds
+def format_time(seconds):
+    formatted = ''
+    minutes, s = divmod(seconds, 60)
+    h, m = divmod(minutes, 60)
+    #formatted = f"{h:02d}:{m:02d}:{s:02d}"
+    if h >= 1:
+        if m > 0:
+            formatted = f"{h:1d} hour(s), {m:1d} minute(s)"
+        else:
+            formatted = f"{h:1d} hour(s)"
+    else:
+        if s > 0:
+            formatted = f"{m:1d} minute(s), {s:1d} second(s)"
+        else:
+            formatted = f"{m:1d} minute(s)"
+    return formatted
+    
 
 # entry point
 if __name__ == '__main__':
@@ -137,7 +157,7 @@ if __name__ == '__main__':
     
     cprint('Using ' + options.model + '...', 'white')
     pf = TextFile(options.prompt_file)
-    cprint('Found ' + str(pf.lines_remaining()) + ' prompts in ' + options.prompt_file + '...', 'white')
+    cprint('Found ' + str(pf.lines_remaining()) + ' prompt(s) in ' + options.prompt_file + '...', 'white')
     cprint('Enhanced prompts will be written to ' + options.output_file + '...', 'white')
     
     template = template_english
@@ -145,17 +165,30 @@ if __name__ == '__main__':
         template = template_original
 
     count = 0
+    total_time = 0
     with open("output.txt", 'w', encoding = 'utf-8') as file:
         while pf.lines_remaining() > 0:
             count += 1
             prompt = pf.next_line()
 
-            cprint('****************************************\nEnhancing prompt #' + str(count) + ':', 'white')
+            cprint('****************************************\nWorking on prompt #' + str(count) + ':', 'white')
             cprint(prompt, 'dark_grey')
+            
+            start_time = time.time()
             enhanced = enhance_prompt(prompt, options.model, template)
-            cprint('\nEnhanced prompt #' + str(count) + ':', 'white')
+            elapsed_time = time.time() - start_time
+            total_time += elapsed_time
+            
+            cprint('\nEnhanced Prompt #' + str(count) + ':', 'white')
             cprint(enhanced, 'light_green')
+            cprint('(completed in ' + str(round(elapsed_time)) + ' seconds)', 'dark_grey')
             cprint('****************************************', 'white')
+            
+            # estime remaining time
+            if count == 2:
+                time_estimate = (elapsed_time * pf.lines_remaining())
+                if time_estimate > 60:
+                    cprint('\n*** Estimated time to complete remaining ' + str(pf.lines_remaining()) + ' prompts: ' + format_time(round(time_estimate)) + '. ***\n', 'light_yellow')
 
             if options.verbose:
                 file.write('\n####################################################################################################\n')
@@ -168,4 +201,5 @@ if __name__ == '__main__':
                 file.write(enhanced.replace('\n', '') + '\n\n')
             file.flush()
     file.close
-    cprint('\nDone, Enhanced prompts written to ' + options.output_file + '!', 'white')
+    cprint('\nAll prompts completed in ' + format_time(round(total_time)) + '.', 'white')
+    cprint('Done, Enhanced prompts written to ' + options.output_file + '!', 'white')
