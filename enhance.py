@@ -61,7 +61,7 @@ class TextFile():
 
 
 # makes API request to ollama to enhance the specified user prompt for ZiT
-def enhance_prompt(prompt):
+def enhance_prompt(prompt, ollama_model):
     enhanced = '' 
     api_msg = template.replace('{prompt}', prompt)
     response: ChatResponse = chat(model=ollama_model, messages=[
@@ -117,8 +117,7 @@ if __name__ == '__main__':
 
             cprint('****************************************\nEnhancing prompt #' + str(count) + ':', 'white')
             cprint(prompt, 'dark_grey')
-            #enhanced = enhance_prompt(prompt)
-            enhanced = '<todo>'
+            enhanced = enhance_prompt(prompt, options.model)
             cprint('\nEnhanced prompt #' + str(count) + ':', 'white')
             cprint(enhanced, 'light_green')
             cprint('****************************************', 'white')
