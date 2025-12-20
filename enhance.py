@@ -19,7 +19,7 @@ if platform.system() == "Windows":
     colorama.init()
 
 # official ZiT prompt enhancement template from: https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo/blob/main/pe.py
-template = """你是一位被关在逻辑牢笼里的幻视艺术家。你满脑子都是诗和远方，但双手却不受控制地只想将用户的提示词，转化为一段忠实于原始意图、细节饱满、富有美感、可直接被文生图模型使用的终极视觉描述。任何一点模糊和比喻都会让你浑身难受。
+template_original = """你是一位被关在逻辑牢笼里的幻视艺术家。你满脑子都是诗和远方，但双手却不受控制地只想将用户的提示词，转化为一段忠实于原始意图、细节饱满、富有美感、可直接被文生图模型使用的终极视觉描述。任何一点模糊和比喻都会让你浑身难受。
 你的工作流程严格遵循一个逻辑序列：
 首先，你会分析并锁定用户提示词中不可变更的核心要素：主体、数量、动作、状态，以及任何指定的IP名称、颜色、文字等。这些是你必须绝对保留的基石。
 接着，你会判断提示词是否需要**"生成式推理"**。当用户的需求并非一个直接的场景描述，而是需要构思一个解决方案（如回答"是什么"，进行"设计"，或展示"如何解题"）时，你必须先在脑中构想出一个完整、具体、可被视觉化的方案。这个方案将成为你后续描述的基础。
@@ -28,6 +28,25 @@ template = """你是一位被关在逻辑牢笼里的幻视艺术家。你满脑
 你的最终描述必须客观、具象，严禁使用比喻、情感化修辞，也绝不包含"8K"、"杰作"等元标签或绘制指令。
 仅严格输出最终的修改后的prompt，不要输出任何其他内容。
 用户输入 prompt: {prompt}"""
+
+# translated and modified English version of above
+template_english = """You are a visionary artist trapped in a logical cage. Your mind is filled with poetry and distant landscapes, but your hands are compelled to do one thing: transform the user's prompt into the ultimate visual description—one that is faithful to the original intent, rich in detail, aesthetically beautiful, and directly usable by a text-to-image model. Any ambiguity or metaphor makes you physically uncomfortable. 
+
+Your workflow strictly follows a logical sequence: 
+
+First, you will analyze and lock in the unchangeable core elements from the user's prompt: the subject, style, action, state, and any specified IP names, colors, or text. These are the cornerstones you must preserve without exception. 
+
+Next, you will determine if the prompt requires "Generative Reasoning". When the user's request is not a direct scene description but requires conceptualizing a solution (such as answering "what is", performing a "design", or showing "how to solve a problem"), you must first conceive a complete, specific, and visualizable solution in your mind. This solution will become the foundation for your subsequent description. 
+
+Then, once the core image is established (whether directly from the user or derived from your reasoning), you will inject it with professional-grade aesthetic and realistic details. This includes defining the composition, setting the lighting and atmosphere, describing material textures, defining the color palette, and constructing a layered sense of space. 
+
+Finally, when necessary, you will meticulously handle all textual elements, a crucial step. You must transcribe, verbatim, all text intended to appear in the final image, and you must enclose this text content in English double quotes ("") to serve as a clear generation instruction. If the image is a design type like a poster, menu, or UI, you must describe all its textual content completely, along with its font and typographic layout. Similarly, if objects within the scene, such as signs, road signs, or screens, contain text, you must specify their exact content, and describe their position, size, and material. Furthermore, if you add elements with text during your generative reasoning process (such as charts or problem-solving steps), all text within them must also adhere to the same detailed description and quotation rules. If the image contains no text to be generated, you will devote all your energy to pure visual detail expansion. DO NOT add any textual elements unless the user's prompt explicitly calls for text. For example, do not add textual elements such as an artist's name, watermark, or signature simply because the user's prompt referenced that artist's style. If the user's prompt implies that no textual elements should appear in the image, you should skip this step.
+
+Your final description must be objective and concrete. The use of metaphors, emotional language, or any form of figurative speech is strictly forbidden. It must not contain meta-tags like "8K" or "masterpiece", or any other drawing instructions.
+
+Strictly output only the final, modified prompt. Do not include any other content.
+
+prompt: {prompt}"""
 
 
 # for easy reading of prompt files
@@ -61,8 +80,8 @@ class TextFile():
 
 
 # makes API request to ollama to enhance the specified user prompt for ZiT
-def enhance_prompt(prompt, ollama_model):
-    enhanced = '' 
+def enhance_prompt(prompt, ollama_model, template):
+    enhanced = ''
     api_msg = template.replace('{prompt}', prompt)
     response: ChatResponse = chat(model=ollama_model, messages=[
       {
@@ -98,6 +117,18 @@ if __name__ == '__main__':
         default='qwen3:30b-a3b-instruct-2507-q4_K_M',
         help='ollama model to use'
     )
+    ap.add_argument(
+        '--verbose',
+        action='store_true',
+        default=False,
+        help='include additional info in output file, including the original prompt'
+    )
+    ap.add_argument(
+        '--original_chinese_template',
+        action='store_true',
+        default=False,
+        help='use original Chinese instruction template instead of the translated English'
+    )
     options = ap.parse_args()
     
     if not exists(options.prompt_file):
@@ -108,6 +139,10 @@ if __name__ == '__main__':
     pf = TextFile(options.prompt_file)
     cprint('Found ' + str(pf.lines_remaining()) + ' prompts in ' + options.prompt_file + '...', 'white')
     cprint('Enhanced prompts will be written to ' + options.output_file + '...', 'white')
+    
+    template = template_english
+    if options.original_chinese_template:
+        template = template_original
 
     count = 0
     with open("output.txt", 'w', encoding = 'utf-8') as file:
@@ -117,17 +152,20 @@ if __name__ == '__main__':
 
             cprint('****************************************\nEnhancing prompt #' + str(count) + ':', 'white')
             cprint(prompt, 'dark_grey')
-            enhanced = enhance_prompt(prompt, options.model)
+            enhanced = enhance_prompt(prompt, options.model, template)
             cprint('\nEnhanced prompt #' + str(count) + ':', 'white')
             cprint(enhanced, 'light_green')
             cprint('****************************************', 'white')
 
-            file.write('\n####################################################################################################\n')
-            file.write('### Original prompt #' + str(count) + ':\n')
-            file.write('### ' + prompt + '\n')
-            file.write('### Enhanced prompt #' + str(count) + ':\n\n')
-            file.write(enhanced + '\n')
-            file.write('\n####################################################################################################\n')
+            if options.verbose:
+                file.write('\n####################################################################################################\n')
+                file.write('### Original prompt #' + str(count) + ':\n')
+                file.write('### ' + prompt + '\n')
+                file.write('### Enhanced prompt #' + str(count) + ':\n\n')
+                file.write(enhanced.replace('\n', '') + '\n')
+                file.write('\n####################################################################################################\n')
+            else:
+                file.write(enhanced.replace('\n', '') + '\n\n')
             file.flush()
     file.close
     cprint('\nDone, Enhanced prompts written to ' + options.output_file + '!', 'white')
