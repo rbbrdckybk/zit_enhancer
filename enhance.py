@@ -128,4 +128,6 @@ if __name__ == '__main__':
             file.write('### Enhanced prompt #' + str(count) + ':\n\n')
             file.write(enhanced + '\n')
             file.write('\n####################################################################################################\n')
+            file.flush()
     file.close
+    cprint('\nDone, Enhanced prompts written to ' + options.output_file + '!', 'white')
