@@ -10,6 +10,7 @@ from ollama import chat
 from ollama import ChatResponse
 from collections import deque
 from termcolor import colored, cprint
+from os import rename
 from os.path import exists
 import argparse
 import platform
@@ -29,25 +30,6 @@ template_original = """你是一位被关在逻辑牢笼里的幻视艺术家。
 你的最终描述必须客观、具象，严禁使用比喻、情感化修辞，也绝不包含"8K"、"杰作"等元标签或绘制指令。
 仅严格输出最终的修改后的prompt，不要输出任何其他内容。
 用户输入 prompt: {prompt}"""
-
-# translated and modified English version of above
-template_english = """You are a visionary artist trapped in a logical cage. Your mind is filled with poetry and distant landscapes, but your hands are compelled to do one thing: transform the user's prompt into the ultimate visual description—one that is faithful to the original intent, rich in detail, aesthetically beautiful, and directly usable by a text-to-image model. Any ambiguity or metaphor makes you physically uncomfortable. 
-
-Your workflow strictly follows a logical sequence: 
-
-First, you will analyze and lock in the unchangeable core elements from the user's prompt: the subject, style, action, state, and any specified IP names, colors, or text. These are the cornerstones you must preserve without exception. 
-
-Next, you will determine if the prompt requires "Generative Reasoning". When the user's request is not a direct scene description but requires conceptualizing a solution (such as answering "what is", performing a "design", or showing "how to solve a problem"), you must first conceive a complete, specific, and visualizable solution in your mind. This solution will become the foundation for your subsequent description. 
-
-Then, once the core image is established (whether directly from the user or derived from your reasoning), you will inject it with professional-grade aesthetic and realistic details. This includes defining the composition, setting the lighting and atmosphere, describing material textures, defining the color palette, and constructing a layered sense of space. 
-
-Finally, when necessary, you will meticulously handle all textual elements, a crucial step. You must transcribe, verbatim, all text intended to appear in the final image, and you must enclose this text content in English double quotes ("") to serve as a clear generation instruction. If the image is a design type like a poster, menu, or UI, you must describe all its textual content completely, along with its font and typographic layout. Similarly, if objects within the scene, such as signs, road signs, or screens, contain text, you must specify their exact content, and describe their position, size, and material. Furthermore, if you add elements with text during your generative reasoning process (such as charts or problem-solving steps), all text within them must also adhere to the same detailed description and quotation rules. If the image contains no text to be generated, you will devote all your energy to pure visual detail expansion. DO NOT add any textual elements unless the user's prompt explicitly calls for text. For example, do not add textual elements such as an artist's name, watermark, or signature simply because the user's prompt referenced that artist's style. If the user's prompt implies that no textual elements should appear in the image, you should skip this step.
-
-Your final description must be objective and concrete. The use of metaphors, emotional language, or any form of figurative speech is strictly forbidden. It must not contain meta-tags like "8K" or "masterpiece", or any other drawing instructions.
-
-Strictly output only the final, modified prompt. Do not include any other content.
-
-prompt: {prompt}"""
 
 
 # for easy reading of prompt files
@@ -111,7 +93,23 @@ def format_time(seconds):
         else:
             formatted = f"{m:1d} minute(s)"
     return formatted
-    
+
+
+# if specified filename already exists, makes a .bak of it    
+def backup_output(filename):
+    bak = ''
+    if exists(filename):
+        if exists(filename + '.bak'):
+            count = 0
+            while exists (filename + '.bak' + str(count)):
+                count += 1
+            bak = (filename + '.bak' + str(count))
+        else:
+            bak = (filename + '.bak')
+        if bak != '':
+            rename(filename, bak)
+    return bak
+
 
 # entry point
 if __name__ == '__main__':
@@ -124,6 +122,12 @@ if __name__ == '__main__':
         type=str,
         required=True,
         help='text file containing a list of prompts to queue'
+    )
+    ap.add_argument(
+        '--template_file',
+        type=str,
+        default='template.txt',
+        help='text file containing the instruction template for the LLM'
     )
     ap.add_argument(
         '--output_file',
@@ -156,17 +160,32 @@ if __name__ == '__main__':
         exit(-1)
     
     cprint('Using ' + options.model + '...', 'white')
-    pf = TextFile(options.prompt_file)
+    
+    # get LLM instruction template
+    template = template_original
+    if not exists(options.template_file):
+        cprint('Warning: specified template file "' + options.template_file + '" does not exist; using default LLM instructions!', 'light_yellow')
+    else:
+        cprint('Using "' + options.template_file + '" as LLM instruction template...', 'white')
+        template = ''
+        with open(options.template_file, encoding = 'utf-8') as f:
+            l = f.readlines()
+        for x in l:
+            # ignore comments and empty whitespace at the start of the template file
+            if not x.strip().startswith('#'):
+                if not (x.strip() == '' and template == ''):
+                    template += x
+
+    pf = TextFile(options.prompt_file)   
     cprint('Found ' + str(pf.lines_remaining()) + ' prompt(s) in ' + options.prompt_file + '...', 'white')
     cprint('Enhanced prompts will be written to ' + options.output_file + '...', 'white')
-    
-    template = template_english
-    if options.original_chinese_template:
-        template = template_original
+    bak_file = backup_output(options.output_file)
+    if bak_file != '':
+        cprint('Warning: specified output file "' + options.output_file + '" already exists; renamed it to "' + bak_file + '"!', 'light_yellow')
 
     count = 0
     total_time = 0
-    with open("output.txt", 'w', encoding = 'utf-8') as file:
+    with open(options.output_file, 'w', encoding = 'utf-8') as file:
         while pf.lines_remaining() > 0:
             count += 1
             prompt = pf.next_line()
@@ -174,6 +193,7 @@ if __name__ == '__main__':
             cprint('****************************************\nWorking on prompt #' + str(count) + ':', 'white')
             cprint(prompt, 'dark_grey')
             
+            # get enhanced prompt from ollama
             start_time = time.time()
             enhanced = enhance_prompt(prompt, options.model, template)
             elapsed_time = time.time() - start_time
@@ -184,12 +204,13 @@ if __name__ == '__main__':
             cprint('(completed in ' + str(round(elapsed_time)) + ' seconds)', 'dark_grey')
             cprint('****************************************', 'white')
             
-            # estime remaining time
+            # estimate remaining time
             if count == 2:
                 time_estimate = (elapsed_time * pf.lines_remaining())
                 if time_estimate > 60:
                     cprint('\n*** Estimated time to complete remaining ' + str(pf.lines_remaining()) + ' prompts: ' + format_time(round(time_estimate)) + '. ***\n', 'light_yellow')
 
+            # write enhanced prompt to output file
             if options.verbose:
                 file.write('\n####################################################################################################\n')
                 file.write('### Original prompt #' + str(count) + ':\n')
